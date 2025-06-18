@@ -1,0 +1,74 @@
+{
+  "cli": {
+    "version": ">= 5.9.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m1-medium"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": {
+        "resourceClass": "m1-medium",
+        "simulator": true
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
+    "production": {
+      "ios": {
+        "resourceClass": "m1-medium",
+        "autoIncrement": "buildNumber"
+      },
+      "android": {
+        "autoIncrement": "versionCode"
+      },
+      "env": {
+        "API_URL": "https://api.newstalk-ai.com",
+        "WS_URL": "wss://api.newstalk-ai.com/ws",
+        "FACT_CHECKING_ACCURACY_TARGET": "0.95",
+        "VOICE_QUALITY_TARGET": "0.90",
+        "NEWS_DELIVERY_TARGET_MINUTES": "5"
+      }
+    },
+    "production-ios": {
+      "extends": "production",
+      "ios": {
+        "resourceClass": "m1-medium",
+        "autoIncrement": "buildNumber",
+        "buildConfiguration": "Release"
+      }
+    },
+    "production-android": {
+      "extends": "production",
+      "android": {
+        "autoIncrement": "versionCode",
+        "buildType": "aab"
+      }
+    }
+  },
+  "submit": {
+    "production": {},
+    "production-ios": {
+      "ios": {
+        "appleId": "your-apple-id@example.com",
+        "ascAppId": "your-app-store-connect-app-id",
+        "appleTeamId": "your-apple-team-id"
+      }
+    },
+    "production-android": {
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json",
+        "track": "production"
+      }
+    }
+  }
+} 

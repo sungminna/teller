@@ -1,0 +1,91 @@
+# Multi-stage build for NewsTalk AI LangGraph Service - Stage 8
+FROM python:3.11-slim as builder
+
+# Build arguments
+ARG BUILD_ENV=production
+ARG POETRY_VERSION=1.7.1
+
+# Labels for metadata
+LABEL maintainer="NewsTalk AI Team <dev@newstalk.ai>"
+LABEL version="1.0.0"
+LABEL description="NewsTalk AI LangGraph Agents Service"
+
+# Install system dependencies for building
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    git \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Poetry
+RUN pip install --no-cache-dir poetry==$POETRY_VERSION
+
+# Configure Poetry
+ENV POETRY_NO_INTERACTION=1 \
+    POETRY_VENV_IN_PROJECT=1 \
+    POETRY_CACHE_DIR=/tmp/poetry_cache \
+    POETRY_INSTALLER_PARALLEL=true
+
+WORKDIR /app
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock ./
+
+# Install dependencies with AI/ML optimizations
+RUN poetry install --no-dev --no-root && rm -rf $POETRY_CACHE_DIR
+
+# Production stage
+FROM python:3.11-slim as runtime
+
+# Create non-root user with specific UID/GID
+RUN groupadd -r -g 1002 langgraph && \
+    useradd -r -g langgraph -u 1002 -m -s /bin/bash langgraph
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    libpq5 \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Copy virtual environment from builder stage
+ENV VIRTUAL_ENV=/app/.venv
+COPY --from=builder --chown=langgraph:langgraph ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+
+# Add virtual environment to PATH
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code
+COPY --chown=langgraph:langgraph . .
+
+# Create necessary directories
+RUN mkdir -p /app/logs /app/tmp /app/checkpoints && \
+    chown -R langgraph:langgraph /app
+
+# Switch to non-root user
+USER langgraph
+
+# Set environment variables for LangGraph
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    LANGGRAPH_SERVICE_PORT=8001 \
+    LANGGRAPH_CHECKPOINT_DIR=/app/checkpoints \
+    LANGGRAPH_MAX_WORKERS=4 \
+    LANGGRAPH_MEMORY_LIMIT=2048
+
+# Health check for LangGraph service
+HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
+    CMD python -c "import requests; requests.get('http://localhost:8001/health', timeout=10)" || exit 1
+
+# Expose port
+EXPOSE 8001
+
+# Run LangGraph service
+CMD ["python", "-m", "langgraph.main", "--host", "0.0.0.0", "--port", "8001", "--workers", "4"] 

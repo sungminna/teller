@@ -1,0 +1,29 @@
+# Airflow Requirements for NewsTeam AI
+# Core dependencies for high-performance news processing
+
+# RSS and Web Processing
+feedparser==6.0.11
+beautifulsoup4==4.12.3
+lxml==5.1.0
+requests==2.31.0
+aiohttp==3.9.1
+
+# Database and Messaging
+psycopg2-binary==2.9.9
+kafka-python==2.0.2
+redis==5.0.1
+
+# AI and ML
+openai==1.51.0
+langchain==0.2.16
+langchain-community==0.2.16
+numpy==1.26.3
+pandas==2.2.0
+scikit-learn==1.4.0
+
+# Data Processing
+httpx==0.27.0
+python-dateutil==2.8.2
+
+# Performance and Monitoring
+prometheus-client==0.20.0 

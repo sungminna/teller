@@ -1,0 +1,416 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-postgres
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: airflow-postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: newstalk-ai
+      component: airflow-postgres
+  template:
+    metadata:
+      labels:
+        app: newstalk-ai
+        component: airflow-postgres
+    spec:
+      containers:
+      - name: airflow-postgres
+        image: postgres:16-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: "airflow"
+        - name: POSTGRES_USER
+          value: "airflow"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: AIRFLOW_POSTGRES_PASSWORD
+        - name: POSTGRES_INITDB_ARGS
+          value: "--encoding=UTF-8"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: airflow-postgres-storage
+          mountPath: /var/lib/postgresql/data
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - airflow
+            - -d
+            - airflow
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - airflow
+            - -d
+            - airflow
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: airflow-postgres-storage
+        persistentVolumeClaim:
+          claimName: airflow-postgres-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-postgres
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: airflow-postgres
+spec:
+  selector:
+    app: newstalk-ai
+    component: airflow-postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-webserver
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: airflow-webserver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: newstalk-ai
+      component: airflow-webserver
+  template:
+    metadata:
+      labels:
+        app: newstalk-ai
+        component: airflow-webserver
+    spec:
+      containers:
+      - name: airflow-webserver
+        image: newstalk-ai/airflow:latest
+        ports:
+        - containerPort: 8080
+        command: ["airflow", "webserver"]
+        env:
+        - name: AIRFLOW_SERVICE
+          value: "webserver"
+        - name: AIRFLOW__CORE__EXECUTOR
+          value: "CeleryExecutor"
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          value: "postgresql+psycopg2://airflow:airflow123@airflow-postgres/airflow"
+        - name: AIRFLOW__CELERY__RESULT_BACKEND
+          value: "db+postgresql://airflow:airflow123@airflow-postgres/airflow"
+        - name: AIRFLOW__CELERY__BROKER_URL
+          value: "redis://redis:6379/0"
+        - name: AIRFLOW__CORE__FERNET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: AIRFLOW__CORE__FERNET_KEY
+        - name: AIRFLOW__WEBSERVER__SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: AIRFLOW__WEBSERVER__SECRET_KEY
+        envFrom:
+        - configMapRef:
+            name: newstalk-ai-config
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+        - name: airflow-plugins
+          mountPath: /opt/airflow/plugins
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: airflow-dags
+        persistentVolumeClaim:
+          claimName: airflow-dags-pvc
+      - name: airflow-logs
+        persistentVolumeClaim:
+          claimName: airflow-logs-pvc
+      - name: airflow-plugins
+        persistentVolumeClaim:
+          claimName: airflow-plugins-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-webserver
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: airflow-webserver
+spec:
+  selector:
+    app: newstalk-ai
+    component: airflow-webserver
+  ports:
+  - port: 8080
+    targetPort: 8080
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-scheduler
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: airflow-scheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: newstalk-ai
+      component: airflow-scheduler
+  template:
+    metadata:
+      labels:
+        app: newstalk-ai
+        component: airflow-scheduler
+    spec:
+      containers:
+      - name: airflow-scheduler
+        image: newstalk-ai/airflow:latest
+        command: ["airflow", "scheduler"]
+        env:
+        - name: AIRFLOW_SERVICE
+          value: "scheduler"
+        - name: AIRFLOW__CORE__EXECUTOR
+          value: "CeleryExecutor"
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          value: "postgresql+psycopg2://airflow:airflow123@airflow-postgres/airflow"
+        - name: AIRFLOW__CELERY__RESULT_BACKEND
+          value: "db+postgresql://airflow:airflow123@airflow-postgres/airflow"
+        - name: AIRFLOW__CELERY__BROKER_URL
+          value: "redis://redis:6379/0"
+        - name: AIRFLOW__CORE__FERNET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: AIRFLOW__CORE__FERNET_KEY
+        envFrom:
+        - configMapRef:
+            name: newstalk-ai-config
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        volumeMounts:
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+        - name: airflow-plugins
+          mountPath: /opt/airflow/plugins
+        livenessProbe:
+          exec:
+            command:
+            - airflow
+            - jobs
+            - check
+            - --job-type
+            - SchedulerJob
+            - --hostname
+            - $(hostname)
+          initialDelaySeconds: 60
+          periodSeconds: 60
+          timeoutSeconds: 30
+          failureThreshold: 3
+      volumes:
+      - name: airflow-dags
+        persistentVolumeClaim:
+          claimName: airflow-dags-pvc
+      - name: airflow-logs
+        persistentVolumeClaim:
+          claimName: airflow-logs-pvc
+      - name: airflow-plugins
+        persistentVolumeClaim:
+          claimName: airflow-plugins-pvc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-worker
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: airflow-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: newstalk-ai
+      component: airflow-worker
+  template:
+    metadata:
+      labels:
+        app: newstalk-ai
+        component: airflow-worker
+    spec:
+      containers:
+      - name: airflow-worker
+        image: newstalk-ai/airflow:latest
+        command: ["airflow", "celery", "worker"]
+        env:
+        - name: AIRFLOW_SERVICE
+          value: "worker"
+        - name: AIRFLOW__CORE__EXECUTOR
+          value: "CeleryExecutor"
+        - name: AIRFLOW__DATABASE__SQL_ALCHEMY_CONN
+          value: "postgresql+psycopg2://airflow:airflow123@airflow-postgres/airflow"
+        - name: AIRFLOW__CELERY__RESULT_BACKEND
+          value: "db+postgresql://airflow:airflow123@airflow-postgres/airflow"
+        - name: AIRFLOW__CELERY__BROKER_URL
+          value: "redis://redis:6379/0"
+        - name: AIRFLOW__CORE__FERNET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: AIRFLOW__CORE__FERNET_KEY
+        envFrom:
+        - configMapRef:
+            name: newstalk-ai-config
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "1000m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        volumeMounts:
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+        - name: airflow-logs
+          mountPath: /opt/airflow/logs
+        - name: airflow-plugins
+          mountPath: /opt/airflow/plugins
+      volumes:
+      - name: airflow-dags
+        persistentVolumeClaim:
+          claimName: airflow-dags-pvc
+      - name: airflow-logs
+        persistentVolumeClaim:
+          claimName: airflow-logs-pvc
+      - name: airflow-plugins
+        persistentVolumeClaim:
+          claimName: airflow-plugins-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-postgres-pvc
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: airflow-postgres
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: fast-ssd
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-dags-pvc
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: airflow
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: fast-ssd
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-logs-pvc
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: airflow
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+  storageClassName: fast-ssd
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-plugins-pvc
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: airflow
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: fast-ssd 

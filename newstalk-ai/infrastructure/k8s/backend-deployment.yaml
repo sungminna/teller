@@ -1,0 +1,319 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fastapi-backend
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: fastapi-backend
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: newstalk-ai
+      component: fastapi-backend
+  template:
+    metadata:
+      labels:
+        app: newstalk-ai
+        component: fastapi-backend
+    spec:
+      containers:
+      - name: fastapi-backend
+        image: newstalk-ai/backend:latest
+        ports:
+        - containerPort: 8000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: newstalk-ai-config
+              key: DATABASE_URL
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: newstalk-ai-config
+              key: REDIS_URL
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: newstalk-ai-config
+              key: KAFKA_BOOTSTRAP_SERVERS
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: OPENAI_API_KEY
+        - name: LANGFUSE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: LANGFUSE_SECRET_KEY
+        - name: LANGFUSE_PUBLIC_KEY
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: LANGFUSE_PUBLIC_KEY
+        - name: LANGFUSE_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: newstalk-ai-config
+              key: LANGFUSE_HOST
+        - name: SLACK_WEBHOOK_URL
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: SLACK_WEBHOOK_URL
+        envFrom:
+        - configMapRef:
+            name: newstalk-ai-config
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "1000m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 40
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fastapi-backend
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: fastapi-backend
+spec:
+  selector:
+    app: newstalk-ai
+    component: fastapi-backend
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: langgraph-service
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: langgraph-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: newstalk-ai
+      component: langgraph-service
+  template:
+    metadata:
+      labels:
+        app: newstalk-ai
+        component: langgraph-service
+    spec:
+      containers:
+      - name: langgraph-service
+        image: newstalk-ai/langgraph:latest
+        ports:
+        - containerPort: 8001
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: newstalk-ai-config
+              key: DATABASE_URL
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: newstalk-ai-config
+              key: REDIS_URL
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: OPENAI_API_KEY
+        - name: LANGFUSE_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: LANGFUSE_SECRET_KEY
+        - name: LANGFUSE_PUBLIC_KEY
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: LANGFUSE_PUBLIC_KEY
+        - name: LANGFUSE_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: newstalk-ai-config
+              key: LANGFUSE_HOST
+        envFrom:
+        - configMapRef:
+            name: newstalk-ai-config
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        volumeMounts:
+        - name: langgraph-checkpoints
+          mountPath: /app/checkpoints
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 15
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 10
+          failureThreshold: 3
+      volumes:
+      - name: langgraph-checkpoints
+        persistentVolumeClaim:
+          claimName: langgraph-checkpoints-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: langgraph-service
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: langgraph-service
+spec:
+  selector:
+    app: newstalk-ai
+    component: langgraph-service
+  ports:
+  - port: 8001
+    targetPort: 8001
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stream-processor
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: stream-processor
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: newstalk-ai
+      component: stream-processor
+  template:
+    metadata:
+      labels:
+        app: newstalk-ai
+        component: stream-processor
+    spec:
+      containers:
+      - name: stream-processor
+        image: newstalk-ai/stream-processor:latest
+        ports:
+        - containerPort: 8002
+        env:
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: newstalk-ai-config
+              key: KAFKA_BOOTSTRAP_SERVERS
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: newstalk-ai-config
+              key: REDIS_URL
+        envFrom:
+        - configMapRef:
+            name: newstalk-ai-config
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "from api.utils.stream_processor import health_check; health_check()"
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "from api.utils.stream_processor import health_check; health_check()"
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stream-processor
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: stream-processor
+spec:
+  selector:
+    app: newstalk-ai
+    component: stream-processor
+  ports:
+  - port: 8002
+    targetPort: 8002
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: langgraph-checkpoints-pvc
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: langgraph-service
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: fast-ssd 

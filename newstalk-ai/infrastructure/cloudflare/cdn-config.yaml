@@ -1,0 +1,226 @@
+# CloudFlare CDN Configuration for NewsTalk AI - Stage 10
+# Audio file caching and performance optimization
+
+zones:
+  - name: "newstalk-ai.com"
+    type: "full"
+    settings:
+      # SSL/TLS Configuration
+      ssl: "full"
+      always_use_https: true
+      min_tls_version: "1.2"
+      tls_1_3: "on"
+      
+      # Security Settings
+      security_level: "medium"
+      browser_integrity_check: true
+      challenge_ttl: 1800
+      
+      # Performance Settings
+      minify:
+        css: true
+        html: true
+        js: true
+      
+      # Caching Configuration
+      cache_level: "aggressive"
+      browser_cache_ttl: 31536000  # 1 year for static assets
+      edge_cache_ttl: 7776000      # 90 days for audio files
+      
+      # Audio File Optimization
+      polish: "lossy"
+      webp: true
+      
+      # Compression
+      brotli: true
+      
+      # Speed Optimizations
+      rocket_loader: true
+      mirage: true
+      
+      # Development Mode (disable for production)
+      development_mode: false
+
+page_rules:
+  - targets:
+      - "newstalk-ai.com/audio/*"
+    actions:
+      cache_level: "cache_everything"
+      edge_cache_ttl: 2592000  # 30 days for audio files
+      browser_cache_ttl: 2592000
+      disable_apps: true
+      disable_performance: false
+      disable_railgun: false
+      disable_security: false
+      
+  - targets:
+      - "newstalk-ai.com/api/*"
+    actions:
+      cache_level: "bypass"
+      disable_apps: false
+      
+  - targets:
+      - "newstalk-ai.com/static/*"
+    actions:
+      cache_level: "cache_everything"
+      edge_cache_ttl: 31536000  # 1 year for static assets
+      browser_cache_ttl: 31536000
+
+# Worker Script for Audio Processing
+workers:
+  - name: "audio-optimizer"
+    script: |
+      addEventListener('fetch', event => {
+        event.respondWith(handleRequest(event.request))
+      })
+
+      async function handleRequest(request) {
+        const url = new URL(request.url)
+        
+        // Check if this is an audio file request
+        if (url.pathname.startsWith('/audio/')) {
+          return handleAudioRequest(request, url)
+        }
+        
+        // Pass through other requests
+        return fetch(request)
+      }
+
+      async function handleAudioRequest(request, url) {
+        const cache = caches.default
+        const cacheKey = new Request(url.toString(), request)
+        
+        // Check cache first
+        let response = await cache.match(cacheKey)
+        
+        if (!response) {
+          // Fetch from origin
+          response = await fetch(request)
+          
+          if (response.ok) {
+            // Clone response for caching
+            const responseToCache = response.clone()
+            
+            // Set cache headers for audio files
+            const headers = new Headers(responseToCache.headers)
+            headers.set('Cache-Control', 'public, max-age=2592000') // 30 days
+            headers.set('X-Audio-Optimized', 'true')
+            
+            const cachedResponse = new Response(responseToCache.body, {
+              status: responseToCache.status,
+              statusText: responseToCache.statusText,
+              headers: headers
+            })
+            
+            // Cache the response
+            event.waitUntil(cache.put(cacheKey, cachedResponse.clone()))
+            
+            return cachedResponse
+          }
+        }
+        
+        return response
+      }
+    routes:
+      - pattern: "newstalk-ai.com/audio/*"
+        zone: "newstalk-ai.com"
+
+# DNS Configuration
+dns_records:
+  - type: "A"
+    name: "@"
+    content: "104.21.0.1"  # CloudFlare IP (example)
+    ttl: 1
+    proxied: true
+    
+  - type: "A"
+    name: "www"
+    content: "104.21.0.1"
+    ttl: 1
+    proxied: true
+    
+  - type: "CNAME"
+    name: "api"
+    content: "newstalk-ai-prod-alb-123456789.us-west-2.elb.amazonaws.com"
+    ttl: 1
+    proxied: true
+    
+  - type: "CNAME"
+    name: "cdn"
+    content: "newstalk-ai.com"
+    ttl: 1
+    proxied: true
+
+# Load Balancing for API endpoints
+load_balancers:
+  - name: "newstalk-ai-api"
+    description: "NewsTalk AI API Load Balancer"
+    ttl: 30
+    proxied: true
+    region: "dynamic"
+    origins:
+      - name: "api-primary"
+        address: "api-primary.newstalk-ai.com"
+        enabled: true
+        weight: 0.7
+        
+      - name: "api-secondary"
+        address: "api-secondary.newstalk-ai.com"
+        enabled: true
+        weight: 0.3
+    
+    health_checks:
+      - type: "https"
+        method: "GET"
+        path: "/health"
+        interval: 30
+        timeout: 5
+        retries: 2
+        expected_codes: "200"
+
+# Rate Limiting
+rate_limiting:
+  - threshold: 100
+    period: 60
+    action: "challenge"
+    match:
+      request:
+        methods: ["GET", "POST"]
+        schemes: ["HTTPS"]
+        url: "newstalk-ai.com/api/*"
+        
+  - threshold: 1000
+    period: 3600
+    action: "block"
+    match:
+      request:
+        methods: ["*"]
+        schemes: ["HTTPS"]
+        url: "newstalk-ai.com/*"
+
+# Firewall Rules
+firewall_rules:
+  - description: "Block known bad IPs"
+    action: "block"
+    expression: '(ip.src in $bad_ips)'
+    
+  - description: "Rate limit API calls"
+    action: "challenge"
+    expression: '(http.request.uri.path matches "^/api/" and rate(1m) > 100)'
+    
+  - description: "Allow authenticated users higher limits"
+    action: "allow"
+    expression: '(http.request.headers["Authorization"] contains "Bearer" and rate(1m) > 100)'
+
+# Transform Rules for Headers
+transform_rules:
+  - description: "Add security headers"
+    expression: 'true'
+    action: "rewrite"
+    action_parameters:
+      headers:
+        "X-Content-Type-Options": "nosniff"
+        "X-Frame-Options": "DENY"
+        "X-XSS-Protection": "1; mode=block"
+        "Strict-Transport-Security": "max-age=31536000; includeSubDomains; preload"
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'" 

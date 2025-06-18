@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: newstalk-ai-prod
+  labels:
+    name: newstalk-ai-prod
+    environment: production
+    project: newstalk-ai
+    stage: "10"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: newstalk-ai-staging
+  labels:
+    name: newstalk-ai-staging
+    environment: staging
+    project: newstalk-ai
+    stage: "10"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: newstalk-ai-monitoring
+  labels:
+    name: newstalk-ai-monitoring
+    environment: monitoring
+    project: newstalk-ai
+    stage: "10" 

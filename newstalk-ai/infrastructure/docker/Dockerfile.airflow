@@ -1,0 +1,70 @@
+# Apache Airflow with LangGraph integration - Stage 8 Production Ready
+FROM apache/airflow:2.8.0-python3.11
+
+# Labels for metadata
+LABEL maintainer="NewsTalk AI Team <dev@newstalk.ai>"
+LABEL version="1.0.0"
+LABEL description="NewsTalk AI Airflow Service"
+
+USER root
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    git \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Switch back to airflow user
+USER airflow
+
+# Copy requirements file
+COPY requirements-airflow.txt /requirements-airflow.txt
+
+# Install Python dependencies with caching
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r /requirements-airflow.txt
+
+# Install additional packages for LangGraph and AI operations
+RUN pip install --no-cache-dir \
+    langgraph==0.2.0 \
+    langchain==0.2.0 \
+    langchain-openai==0.1.0 \
+    openai==1.51.0 \
+    langfuse==2.46.0 \
+    pandas==2.2.0 \
+    scikit-learn==1.4.0 \
+    httpx==0.27.0 \
+    pydantic==2.9.0 \
+    prometheus-client==0.19.0 \
+    kafka-python==2.0.2
+
+# Set environment variables for production
+ENV AIRFLOW__CORE__LOAD_EXAMPLES=False \
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=True \
+    AIRFLOW__WEBSERVER__EXPOSE_CONFIG=True \
+    AIRFLOW__CORE__PARALLELISM=32 \
+    AIRFLOW__CORE__DAG_CONCURRENCY=16 \
+    AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG=4 \
+    AIRFLOW__CELERY__WORKER_CONCURRENCY=4 \
+    AIRFLOW__CORE__DAGBAG_IMPORT_TIMEOUT=60 \
+    AIRFLOW__WEBSERVER__WEB_SERVER_WORKER_TIMEOUT=300 \
+    PYTHONPATH=/opt/airflow
+
+# Create directories with proper permissions
+RUN mkdir -p /opt/airflow/dags /opt/airflow/logs /opt/airflow/plugins /opt/airflow/tmp && \
+    chown -R airflow:root /opt/airflow
+
+# Health check for different services
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD if [ "$AIRFLOW_SERVICE" = "webserver" ]; then \
+            curl -f http://localhost:8080/health; \
+        elif [ "$AIRFLOW_SERVICE" = "scheduler" ]; then \
+            airflow jobs check --job-type SchedulerJob --hostname $(hostname); \
+        else \
+            exit 0; \
+        fi 

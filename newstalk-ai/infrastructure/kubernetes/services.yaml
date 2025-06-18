@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: newstalk-ai-backend-service
+  namespace: newstalk-ai-prod
+  labels:
+    app: newstalk-ai-backend
+    environment: production
+    stage: "10"
+spec:
+  selector:
+    app: newstalk-ai-backend
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8000
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: newstalk-ai-fact-checker-service
+  namespace: newstalk-ai-prod
+  labels:
+    app: newstalk-ai-fact-checker
+    environment: production
+    stage: "10"
+spec:
+  selector:
+    app: newstalk-ai-fact-checker
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8001
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: newstalk-ai-voice-generator-service
+  namespace: newstalk-ai-prod
+  labels:
+    app: newstalk-ai-voice-generator
+    environment: production
+    stage: "10"
+spec:
+  selector:
+    app: newstalk-ai-voice-generator
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8002
+    protocol: TCP
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: newstalk-ai-ingress
+  namespace: newstalk-ai-prod
+  labels:
+    app: newstalk-ai
+    environment: production
+    stage: "10"
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  tls:
+  - hosts:
+    - api.newstalk-ai.com
+    secretName: newstalk-ai-tls
+  rules:
+  - host: api.newstalk-ai.com
+    http:
+      paths:
+      - path: /api/v1(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: newstalk-ai-backend-service
+            port:
+              number: 80
+      - path: /api/fact-check(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: newstalk-ai-fact-checker-service
+            port:
+              number: 80
+      - path: /api/voice(/|$)(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: newstalk-ai-voice-generator-service
+            port:
+              number: 80 

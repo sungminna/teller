@@ -1,0 +1,348 @@
+groups:
+  # === API PERFORMANCE ALERTS ===
+  - name: api_performance
+    rules:
+      - alert: HighAPIResponseTime
+        expr: histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m])) > 5
+        for: 2m
+        labels:
+          severity: warning
+          category: performance
+          service: api
+        annotations:
+          summary: "High API response time detected"
+          description: "95th percentile API response time is {{ $value }}s, which is above the 5s threshold"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/high-api-response-time"
+
+      - alert: CriticalAPIResponseTime
+        expr: histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m])) > 10
+        for: 1m
+        labels:
+          severity: critical
+          category: performance
+          service: api
+        annotations:
+          summary: "Critical API response time detected"
+          description: "95th percentile API response time is {{ $value }}s, which is critically high"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/critical-api-response-time"
+
+      - alert: HighAPIErrorRate
+        expr: rate(api_requests_total{status_code=~"4..|5.."}[5m]) / rate(api_requests_total[5m]) * 100 > 5
+        for: 2m
+        labels:
+          severity: warning
+          category: performance
+          service: api
+        annotations:
+          summary: "High API error rate detected"
+          description: "API error rate is {{ $value }}%, which is above the 5% threshold"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/high-api-error-rate"
+
+      - alert: CriticalAPIErrorRate
+        expr: rate(api_requests_total{status_code=~"4..|5.."}[5m]) / rate(api_requests_total[5m]) * 100 > 15
+        for: 1m
+        labels:
+          severity: critical
+          category: performance
+          service: api
+        annotations:
+          summary: "Critical API error rate detected"
+          description: "API error rate is {{ $value }}%, which is critically high"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/critical-api-error-rate"
+
+      - alert: APIServiceDown
+        expr: up{job="newstalk-api"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: system
+          service: api
+        annotations:
+          summary: "API service is down"
+          description: "NewsTalk AI API service has been down for more than 1 minute"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/api-service-down"
+
+  # === AIRFLOW ALERTS ===
+  - name: airflow_performance
+    rules:
+      - alert: AirflowDAGFailure
+        expr: airflow_dag_success_rate < 90
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+          service: airflow
+        annotations:
+          summary: "Airflow DAG success rate is low"
+          description: "DAG {{ $labels.dag_id }} success rate is {{ $value }}%, which is below 90%"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/airflow-dag-failure"
+
+      - alert: AirflowDAGCriticalFailure
+        expr: airflow_dag_success_rate < 70
+        for: 2m
+        labels:
+          severity: critical
+          category: system
+          service: airflow
+        annotations:
+          summary: "Critical Airflow DAG failure rate"
+          description: "DAG {{ $labels.dag_id }} success rate is {{ $value }}%, which is critically low"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/airflow-critical-failure"
+
+      - alert: AirflowHighQueueSize
+        expr: airflow_queue_size > 100
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+          service: airflow
+        annotations:
+          summary: "High Airflow queue size"
+          description: "Airflow queue {{ $labels.queue_name }} has {{ $value }} tasks, which is above 100"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/airflow-high-queue"
+
+      - alert: AirflowServiceDown
+        expr: up{job="airflow-webserver"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          category: system
+          service: airflow
+        annotations:
+          summary: "Airflow webserver is down"
+          description: "Airflow webserver has been down for more than 2 minutes"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/airflow-service-down"
+
+  # === LANGGRAPH ALERTS ===
+  - name: langgraph_performance
+    rules:
+      - alert: LangGraphAgentFailure
+        expr: langgraph_agent_success_rate < 85
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+          service: langgraph
+        annotations:
+          summary: "LangGraph agent success rate is low"
+          description: "Agent {{ $labels.agent_name }} success rate is {{ $value }}%, which is below 85%"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/langgraph-agent-failure"
+
+      - alert: LangGraphHighExecutionTime
+        expr: rate(langgraph_agent_execution_seconds_sum[5m]) / rate(langgraph_agent_execution_seconds_count[5m]) > 120
+        for: 3m
+        labels:
+          severity: warning
+          category: performance
+          service: langgraph
+        annotations:
+          summary: "High LangGraph agent execution time"
+          description: "Agent {{ $labels.agent_name }} average execution time is {{ $value }}s, which is above 120s"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/langgraph-high-execution-time"
+
+      - alert: LangGraphFrequentCheckpoints
+        expr: rate(langgraph_checkpoints_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+          service: langgraph
+        annotations:
+          summary: "Frequent LangGraph checkpoints detected"
+          description: "Agent {{ $labels.agent_name }} is creating checkpoints at {{ $value }}/sec, which may indicate issues"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/langgraph-frequent-checkpoints"
+
+  # === LLM COST ALERTS ===
+  - name: llm_cost_monitoring
+    rules:
+      - alert: HighDailyLLMCost
+        expr: llm_cost_daily_usd > 40
+        for: 1m
+        labels:
+          severity: warning
+          category: cost
+          service: llm
+        annotations:
+          summary: "High daily LLM cost detected"
+          description: "Daily LLM cost for {{ $labels.model }} is ${{ $value }}, approaching the $50 limit"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/high-llm-cost"
+
+      - alert: CriticalDailyLLMCost
+        expr: llm_cost_daily_usd > 45
+        for: 1m
+        labels:
+          severity: critical
+          category: cost
+          service: llm
+        annotations:
+          summary: "Critical daily LLM cost detected"
+          description: "Daily LLM cost for {{ $labels.model }} is ${{ $value }}, very close to the $50 limit"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/critical-llm-cost"
+
+      - alert: HighLLMRequestLatency
+        expr: histogram_quantile(0.95, rate(llm_request_duration_seconds_bucket[5m])) > 30
+        for: 3m
+        labels:
+          severity: warning
+          category: performance
+          service: llm
+        annotations:
+          summary: "High LLM request latency"
+          description: "95th percentile LLM request latency for {{ $labels.model }} is {{ $value }}s"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/high-llm-latency"
+
+  # === BUSINESS METRICS ALERTS ===
+  - name: business_metrics
+    rules:
+      - alert: LowUserSatisfaction
+        expr: user_satisfaction_score < 7.0
+        for: 10m
+        labels:
+          severity: warning
+          category: business
+          service: business
+        annotations:
+          summary: "Low user satisfaction detected"
+          description: "User satisfaction score for {{ $labels.user_segment }} is {{ $value }}, below the 7.0 threshold"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/low-user-satisfaction"
+
+      - alert: LowContentQuality
+        expr: content_quality_score < 7.5
+        for: 10m
+        labels:
+          severity: warning
+          category: business
+          service: business
+        annotations:
+          summary: "Low content quality detected"
+          description: "Content quality score for {{ $labels.content_type }} is {{ $value }}, below the 7.5 threshold"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/low-content-quality"
+
+      - alert: LowArticleProcessingRate
+        expr: rate(articles_processed_total[1h]) < 50
+        for: 15m
+        labels:
+          severity: warning
+          category: business
+          service: business
+        annotations:
+          summary: "Low article processing rate"
+          description: "Article processing rate is {{ $value }}/hour, below expected rate of 50/hour"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/low-processing-rate"
+
+  # === SYSTEM RESOURCE ALERTS ===
+  - name: system_resources
+    rules:
+      - alert: HighCPUUsage
+        expr: system_cpu_usage_percent > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+          service: system
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage for {{ $labels.service }} is {{ $value }}%, above 80% threshold"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/high-cpu-usage"
+
+      - alert: CriticalCPUUsage
+        expr: system_cpu_usage_percent > 90
+        for: 2m
+        labels:
+          severity: critical
+          category: system
+          service: system
+        annotations:
+          summary: "Critical CPU usage detected"
+          description: "CPU usage for {{ $labels.service }} is {{ $value }}%, critically high"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/critical-cpu-usage"
+
+      - alert: HighMemoryUsage
+        expr: system_memory_usage_bytes / 1024 / 1024 / 1024 > 8
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+          service: system
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage for {{ $labels.service }} is {{ $value }}GB, above 8GB threshold"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/high-memory-usage"
+
+      - alert: HighRedisConnections
+        expr: redis_connections_active > 500
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+          service: redis
+        annotations:
+          summary: "High Redis connection count"
+          description: "Redis instance {{ $labels.redis_instance }} has {{ $value }} active connections"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/high-redis-connections"
+
+      - alert: HighKafkaLag
+        expr: kafka_consumer_lag > 1000
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+          service: kafka
+        annotations:
+          summary: "High Kafka consumer lag"
+          description: "Kafka topic {{ $labels.topic }} has lag of {{ $value }} messages"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/high-kafka-lag"
+
+  # === DATABASE ALERTS ===
+  - name: database_health
+    rules:
+      - alert: DatabaseConnectionFailure
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: system
+          service: database
+        annotations:
+          summary: "Database connection failure"
+          description: "Cannot connect to PostgreSQL database"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/database-connection-failure"
+
+      - alert: RedisConnectionFailure
+        expr: up{job="redis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: system
+          service: redis
+        annotations:
+          summary: "Redis connection failure"
+          description: "Cannot connect to Redis cache"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/redis-connection-failure"
+
+  # === PIPELINE PERFORMANCE ALERTS ===
+  - name: pipeline_performance
+    rules:
+      - alert: LongPipelineExecution
+        expr: pipeline_execution_time_seconds > 300
+        for: 1m
+        labels:
+          severity: warning
+          category: performance
+          service: pipeline
+        annotations:
+          summary: "Long pipeline execution time"
+          description: "Pipeline {{ $labels.pipeline_name }} execution time is {{ $value }}s, above 5-minute threshold"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/long-pipeline-execution"
+
+      - alert: PipelineFailure
+        expr: pipeline_success_rate < 90
+        for: 5m
+        labels:
+          severity: warning
+          category: system
+          service: pipeline
+        annotations:
+          summary: "Pipeline failure rate is high"
+          description: "Pipeline {{ $labels.pipeline_name }} success rate is {{ $value }}%, below 90%"
+          runbook_url: "https://docs.newstalk-ai.com/runbooks/pipeline-failure" 

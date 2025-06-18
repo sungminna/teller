@@ -1,0 +1,430 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "NewsTalk AI - Stage 7 Monitoring Dashboard",
+    "tags": ["newstalk-ai", "stage-7", "monitoring"],
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "System Overview",
+        "type": "stat",
+        "gridPos": {"h": 4, "w": 24, "x": 0, "y": 0},
+        "targets": [
+          {
+            "expr": "up{job=\"newstalk-api\"}",
+            "legendFormat": "API Status"
+          },
+          {
+            "expr": "up{job=\"airflow\"}",
+            "legendFormat": "Airflow Status"
+          },
+          {
+            "expr": "redis_connections_active",
+            "legendFormat": "Redis Connections"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "0": {"text": "DOWN", "color": "red"},
+                  "1": {"text": "UP", "color": "green"}
+                },
+                "type": "value"
+              }
+            ],
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "API Performance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+        "targets": [
+          {
+            "expr": "rate(api_requests_total[5m])",
+            "legendFormat": "Requests/sec - {{endpoint}}"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(api_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile latency"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(api_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "50th percentile latency"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Requests/sec",
+            "min": 0
+          },
+          {
+            "label": "Latency (seconds)",
+            "min": 0
+          }
+        ],
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom"
+        }
+      },
+      {
+        "id": 3,
+        "title": "API Error Rate",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 12, "y": 4},
+        "targets": [
+          {
+            "expr": "rate(api_requests_total{status_code=~\"4..|5..\"}[5m]) / rate(api_requests_total[5m]) * 100",
+            "legendFormat": "Error Rate %"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "percent",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 1},
+                {"color": "red", "value": 5}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 4,
+        "title": "Concurrent Connections",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 6, "x": 18, "y": 4},
+        "targets": [
+          {
+            "expr": "api_concurrent_connections",
+            "legendFormat": "{{connection_type}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 500},
+                {"color": "red", "value": 900}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 5,
+        "title": "Airflow DAG Performance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+        "targets": [
+          {
+            "expr": "airflow_dag_success_rate",
+            "legendFormat": "Success Rate - {{dag_id}}"
+          },
+          {
+            "expr": "rate(airflow_dag_duration_seconds_sum[5m]) / rate(airflow_dag_duration_seconds_count[5m])",
+            "legendFormat": "Avg Duration - {{dag_id}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Success Rate (%)",
+            "min": 0,
+            "max": 100
+          },
+          {
+            "label": "Duration (seconds)",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Airflow Queue Status",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+        "targets": [
+          {
+            "expr": "airflow_queue_size",
+            "legendFormat": "{{queue_name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 50},
+                {"color": "red", "value": 100}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 7,
+        "title": "LangGraph Agent Performance",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+        "targets": [
+          {
+            "expr": "langgraph_agent_success_rate",
+            "legendFormat": "Success Rate - {{agent_name}}"
+          },
+          {
+            "expr": "rate(langgraph_agent_execution_seconds_sum[5m]) / rate(langgraph_agent_execution_seconds_count[5m])",
+            "legendFormat": "Avg Execution Time - {{agent_name}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Success Rate (%)",
+            "min": 0,
+            "max": 100
+          },
+          {
+            "label": "Execution Time (seconds)",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "LangGraph Checkpoints",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+        "targets": [
+          {
+            "expr": "rate(langgraph_checkpoints_total[5m])",
+            "legendFormat": "Checkpoints/sec - {{agent_name}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 0.1},
+                {"color": "red", "value": 0.5}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 9,
+        "title": "LLM Cost Tracking",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 28},
+        "targets": [
+          {
+            "expr": "llm_cost_daily_usd",
+            "legendFormat": "Daily Cost - {{model}}"
+          },
+          {
+            "expr": "rate(llm_tokens_total[5m])",
+            "legendFormat": "Token Usage Rate - {{model}} {{token_type}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Cost (USD)",
+            "min": 0
+          },
+          {
+            "label": "Tokens/sec",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 10,
+        "title": "LLM Request Latency",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 28},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(llm_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "95th percentile - {{model}}"
+          },
+          {
+            "expr": "histogram_quantile(0.50, rate(llm_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "50th percentile - {{model}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "Latency (seconds)",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Business Metrics",
+        "type": "stat",
+        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 36},
+        "targets": [
+          {
+            "expr": "user_satisfaction_score",
+            "legendFormat": "User Satisfaction"
+          },
+          {
+            "expr": "content_quality_score",
+            "legendFormat": "Content Quality"
+          },
+          {
+            "expr": "rate(articles_processed_total[1h])",
+            "legendFormat": "Articles/hour"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "mappings": [
+              {
+                "options": {
+                  "from": 8,
+                  "to": 10,
+                  "result": {"color": "green"}
+                },
+                "type": "range"
+              },
+              {
+                "options": {
+                  "from": 6,
+                  "to": 8,
+                  "result": {"color": "yellow"}
+                },
+                "type": "range"
+              },
+              {
+                "options": {
+                  "from": 0,
+                  "to": 6,
+                  "result": {"color": "red"}
+                },
+                "type": "range"
+              }
+            ],
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "yellow", "value": 6},
+                {"color": "green", "value": 8}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 12,
+        "title": "System Resources",
+        "type": "graph",
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 42},
+        "targets": [
+          {
+            "expr": "system_cpu_usage_percent",
+            "legendFormat": "CPU Usage - {{service}}"
+          },
+          {
+            "expr": "system_memory_usage_bytes / 1024 / 1024 / 1024",
+            "legendFormat": "Memory Usage GB - {{service}}"
+          }
+        ],
+        "yAxes": [
+          {
+            "label": "CPU %",
+            "min": 0,
+            "max": 100
+          },
+          {
+            "label": "Memory (GB)",
+            "min": 0
+          }
+        ]
+      },
+      {
+        "id": 13,
+        "title": "Redis & Kafka Health",
+        "type": "stat",
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 42},
+        "targets": [
+          {
+            "expr": "redis_connections_active",
+            "legendFormat": "Redis Connections"
+          },
+          {
+            "expr": "kafka_consumer_lag",
+            "legendFormat": "Kafka Lag - {{topic}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "unit": "short",
+            "thresholds": {
+              "steps": [
+                {"color": "green", "value": 0},
+                {"color": "yellow", "value": 100},
+                {"color": "red", "value": 1000}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 14,
+        "title": "Alert Summary",
+        "type": "table",
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 50},
+        "targets": [
+          {
+            "expr": "increase(alerts_total[24h])",
+            "legendFormat": "{{severity}} - {{category}}",
+            "format": "table"
+          }
+        ],
+        "transformations": [
+          {
+            "id": "organize",
+            "options": {
+              "excludeByName": {
+                "__name__": true,
+                "Time": true
+              },
+              "renameByName": {
+                "severity": "Severity",
+                "category": "Category",
+                "Value": "Count (24h)"
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s",
+    "schemaVersion": 30,
+    "version": 1,
+    "uid": "newstalk-ai-monitoring"
+  }
+} 

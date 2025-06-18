@@ -1,0 +1,146 @@
+{
+  "expo": {
+    "name": "NewsTalk AI",
+    "slug": "newstalk-ai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "scheme": "newstalk-ai",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a1a"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.newstalk.ai",
+      "buildNumber": "1",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "NSCameraUsageDescription": "This app uses the camera to scan QR codes for quick login.",
+        "NSMicrophoneUsageDescription": "This app uses the microphone for voice commands and audio recording.",
+        "NSLocationWhenInUseUsageDescription": "This app uses location to provide location-based news recommendations.",
+        "NSUserTrackingUsageDescription": "This app uses tracking to provide personalized news recommendations and improve user experience.",
+        "UIBackgroundModes": [
+          "audio",
+          "background-processing",
+          "background-fetch"
+        ]
+      },
+      "associatedDomains": [
+        "applinks:newstalk-ai.com"
+      ]
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a1a"
+      },
+      "package": "com.newstalk.ai",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.WAKE_LOCK",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "newstalk-ai.com"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#ffffff",
+          "sounds": [
+            "./assets/notification-sound.wav"
+          ]
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "This app uses the microphone for voice commands and audio recording."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "This app uses location to provide location-based news recommendations."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "This app uses the camera to scan QR codes for quick login."
+        }
+      ],
+      [
+        "expo-updates",
+        {
+          "username": "newstalk-ai"
+        }
+      ],
+      [
+        "@react-native-async-storage/async-storage",
+        {
+          "useNextStorage": true
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "newstalk-ai-prod"
+      },
+      "apiUrl": "https://api.newstalk-ai.com",
+      "wsUrl": "wss://api.newstalk-ai.com/ws",
+      "factCheckingAccuracyTarget": 0.95,
+      "voiceQualityTarget": 0.90,
+      "newsDeliveryTargetMinutes": 5
+    },
+    "owner": "newstalk-ai",
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/newstalk-ai-prod"
+    }
+  }
+} 

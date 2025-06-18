@@ -1,0 +1,130 @@
+# Prometheus Configuration for NewsTalk AI Stage 7 Monitoring
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+  external_labels:
+    cluster: 'newstalk-ai'
+    environment: 'development'
+
+rule_files:
+  - "alert_rules.yml"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - alertmanager:9093
+
+scrape_configs:
+  # === CORE APPLICATION METRICS ===
+  
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # NewsTalk AI API - Enhanced monitoring
+  - job_name: 'newstalk-api'
+    static_configs:
+      - targets: ['fastapi-backend:8000']
+    metrics_path: '/monitoring/metrics'
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'newstalk-api'
+
+  # === AIRFLOW METRICS ===
+  
+  # Airflow webserver metrics
+  - job_name: 'airflow-webserver'
+    static_configs:
+      - targets: ['airflow-webserver:8080']
+    metrics_path: '/admin/metrics'
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'airflow-webserver'
+
+  # Airflow scheduler metrics
+  - job_name: 'airflow-scheduler'
+    static_configs:
+      - targets: ['airflow-scheduler:8793']
+    metrics_path: '/admin/metrics'
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'airflow-scheduler'
+
+  # === DATABASE AND CACHE METRICS ===
+  
+  # PostgreSQL Database
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['postgres:5432']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'postgres-main'
+
+  # Redis Cache
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'redis-main'
+
+  # === KAFKA METRICS ===
+  
+  # Kafka
+  - job_name: 'kafka'
+    static_configs:
+      - targets: ['kafka:9092']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'kafka-broker'
+
+  # === SYSTEM METRICS ===
+  
+  # Node Exporter for system metrics
+  - job_name: 'node-exporter'
+    static_configs:
+      - targets: ['node-exporter:9100']
+    scrape_interval: 30s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'newstalk-host'
+
+  # cAdvisor for container metrics
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'docker-host'
+
+  # === BUSINESS METRICS ===
+  
+  # Custom business metrics endpoint
+  - job_name: 'business-metrics'
+    static_configs:
+      - targets: ['fastapi-backend:8000']
+    metrics_path: '/monitoring/metrics/business'
+    scrape_interval: 60s
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: service
+        replacement: 'business' 

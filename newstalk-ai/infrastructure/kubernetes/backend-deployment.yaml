@@ -1,0 +1,358 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: newstalk-ai-backend
+  namespace: newstalk-ai-prod
+  labels:
+    app: newstalk-ai-backend
+    version: v1.0.0
+    environment: production
+    stage: "10"
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: newstalk-ai-backend
+  template:
+    metadata:
+      labels:
+        app: newstalk-ai-backend
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: newstalk-ai-backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: backend
+        image: newstalk-ai/backend:v1.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: redis-url
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: kafka-bootstrap-servers
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: openai-api-key
+        - name: FACT_CHECKING_ACCURACY_TARGET
+          value: "0.95"
+        - name: NEWS_DELIVERY_TARGET_MINUTES
+          value: "5"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        startupProbe:
+          httpGet:
+            path: /startup
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          failureThreshold: 30
+      volumes:
+      - name: app-config
+        configMap:
+          name: newstalk-ai-config
+      - name: logs
+        emptyDir: {}
+      nodeSelector:
+        role: general
+      tolerations:
+      - key: "general"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - newstalk-ai-backend
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: newstalk-ai-fact-checker
+  namespace: newstalk-ai-prod
+  labels:
+    app: newstalk-ai-fact-checker
+    version: v1.0.0
+    environment: production
+    stage: "10"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: newstalk-ai-fact-checker
+  template:
+    metadata:
+      labels:
+        app: newstalk-ai-fact-checker
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8001"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: newstalk-ai-backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: fact-checker
+        image: newstalk-ai/fact-checker:v1.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8001
+          name: http
+          protocol: TCP
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: FACT_CHECKING_ACCURACY_TARGET
+          value: "0.95"
+        - name: CONFIDENCE_THRESHOLD
+          value: "0.85"
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: redis-url
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: openai-api-key
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /startup
+            port: 8001
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+      nodeSelector:
+        role: ai-workload
+      tolerations:
+      - key: "ai-workload"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - newstalk-ai-fact-checker
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: newstalk-ai-voice-generator
+  namespace: newstalk-ai-prod
+  labels:
+    app: newstalk-ai-voice-generator
+    version: v1.0.0
+    environment: production
+    stage: "10"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: newstalk-ai-voice-generator
+  template:
+    metadata:
+      labels:
+        app: newstalk-ai-voice-generator
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8002"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: newstalk-ai-backend
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+      - name: voice-generator
+        image: newstalk-ai/voice-generator:v1.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8002
+          name: http
+          protocol: TCP
+        env:
+        - name: ENVIRONMENT
+          value: "production"
+        - name: VOICE_QUALITY_TARGET
+          value: "0.90"
+        - name: S3_ASSETS_BUCKET
+          valueFrom:
+            configMapKeyRef:
+              name: newstalk-ai-config
+              key: s3-assets-bucket
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: openai-api-key
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: aws-access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: newstalk-ai-secrets
+              key: aws-secret-access-key
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8002
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8002
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /startup
+            port: 8002
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 30
+        volumeMounts:
+        - name: temp-audio
+          mountPath: /tmp/audio
+      volumes:
+      - name: temp-audio
+        emptyDir:
+          sizeLimit: 1Gi
+      nodeSelector:
+        role: ai-workload
+      tolerations:
+      - key: "ai-workload"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - newstalk-ai-voice-generator
+              topologyKey: kubernetes.io/hostname 

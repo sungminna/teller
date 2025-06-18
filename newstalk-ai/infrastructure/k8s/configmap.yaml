@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: newstalk-ai-config
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: config
+data:
+  # Database Configuration
+  POSTGRES_DB: "newstalk_ai"
+  POSTGRES_USER: "postgres"
+  DATABASE_URL: "postgresql://postgres:postgres123@postgres:5432/newstalk_ai"
+  
+  # Redis Configuration
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_URL: "redis://redis:6379/0"
+  REDIS_USER_SESSION_TTL: "86400"
+  REDIS_NEWS_CONTENT_TTL: "21600"
+  REDIS_VOICE_FILES_TTL: "0"
+  REDIS_REALTIME_STATS_TTL: "300"
+  
+  # Kafka Configuration
+  KAFKA_HOST: "kafka"
+  KAFKA_PORT: "29092"
+  KAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
+  KAFKA_RAW_NEWS_TOPIC: "raw-news"
+  KAFKA_PROCESSED_NEWS_TOPIC: "processed-news"
+  KAFKA_USER_FEEDBACK_TOPIC: "user-feedback"
+  KAFKA_REALTIME_UPDATES_TOPIC: "real-time-updates"
+  
+  # Airflow Configuration
+  AIRFLOW__CORE__EXECUTOR: "CeleryExecutor"
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: "postgresql+psycopg2://airflow:airflow123@airflow-postgres/airflow"
+  AIRFLOW__CELERY__RESULT_BACKEND: "db+postgresql://airflow:airflow123@airflow-postgres/airflow"
+  AIRFLOW__CELERY__BROKER_URL: "redis://redis:6379/0"
+  AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "true"
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__CORE__PARALLELISM: "32"
+  AIRFLOW__CORE__DAG_CONCURRENCY: "16"
+  AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG: "4"
+  AIRFLOW__CELERY__WORKER_CONCURRENCY: "4"
+  
+  # Pipeline Configuration
+  PIPELINE_MAX_PROCESSING_TIME: "300"
+  PIPELINE_BATCH_SIZE: "20"
+  PIPELINE_PARALLEL_WORKERS: "4"
+  
+  # Streaming Configuration
+  SSE_MAX_CONNECTIONS: "1000"
+  ENABLE_STREAMING: "true"
+  REALTIME_BUFFER_SIZE: "1000"
+  STREAM_PROCESSING_ENABLED: "true"
+  STREAM_BATCH_SIZE: "100"
+  STREAM_PROCESSING_INTERVAL: "10"
+  
+  # LangGraph Configuration
+  LANGGRAPH_SERVICE_PORT: "8001"
+  LANGGRAPH_CHECKPOINT_DIR: "/app/checkpoints"
+  LANGGRAPH_MAX_WORKERS: "4"
+  LANGGRAPH_MEMORY_LIMIT: "2048"
+  
+  # Monitoring Configuration
+  PROMETHEUS_URL: "http://prometheus:9090"
+  GRAFANA_URL: "http://grafana:3000"
+  
+  # Application Settings
+  PYTHONPATH: "/app"
+  PYTHONUNBUFFERED: "1"
+  PYTHONDONTWRITEBYTECODE: "1"
+  
+  # Stage 7: Monitoring Settings
+  LANGFUSE_HOST: "https://cloud.langfuse.com"
+  SLACK_CHANNEL: "#newstalk-alerts"
+  ALERT_THRESHOLDS_API_RESPONSE_TIME_WARNING: "5.0"
+  ALERT_THRESHOLDS_API_RESPONSE_TIME_CRITICAL: "10.0"
+  ALERT_THRESHOLDS_API_ERROR_RATE_WARNING: "0.05"
+  ALERT_THRESHOLDS_API_ERROR_RATE_CRITICAL: "0.15"
+  ALERT_THRESHOLDS_DAG_SUCCESS_RATE_WARNING: "0.90"
+  ALERT_THRESHOLDS_DAG_SUCCESS_RATE_CRITICAL: "0.70"
+  ALERT_THRESHOLDS_LLM_DAILY_COST_WARNING: "40.0"
+  ALERT_THRESHOLDS_LLM_DAILY_COST_CRITICAL: "45.0"
+  ALERT_THRESHOLDS_AGENT_SUCCESS_RATE_WARNING: "0.85"
+  ALERT_THRESHOLDS_USER_SATISFACTION_WARNING: "7.0"
+  ALERT_THRESHOLDS_CONTENT_QUALITY_WARNING: "7.5" 

@@ -1,0 +1,301 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: newstalk-ai-ingress
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: ingress
+  annotations:
+    # NGINX Ingress Controller annotations
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    
+    # Rate limiting
+    nginx.ingress.kubernetes.io/rate-limit-rpm: "100"
+    nginx.ingress.kubernetes.io/rate-limit-connections: "10"
+    
+    # CORS configuration
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization"
+    
+    # SSL configuration
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+      add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' wss: https:; font-src 'self' data:; object-src 'none'; media-src 'self'; frame-src 'none';" always;
+
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - api.newstalk-ai.com
+    - airflow.newstalk-ai.com
+    - grafana.newstalk-ai.com
+    - kafka-ui.newstalk-ai.com
+    secretName: newstalk-ai-tls
+  rules:
+  # FastAPI Backend
+  - host: api.newstalk-ai.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: fastapi-backend
+            port:
+              number: 8000
+  
+  # Airflow Webserver
+  - host: airflow.newstalk-ai.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: airflow-webserver
+            port:
+              number: 8080
+  
+  # Grafana Dashboard
+  - host: grafana.newstalk-ai.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana
+            port:
+              number: 3000
+  
+  # Kafka UI
+  - host: kafka-ui.newstalk-ai.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: kafka-ui
+            port:
+              number: 8080
+
+---
+# Internal Ingress for development/staging
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: newstalk-ai-internal-ingress
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: internal-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    # Internal access only
+    nginx.ingress.kubernetes.io/whitelist-source-range: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+
+spec:
+  ingressClassName: nginx
+  rules:
+  # Development API access
+  - host: api-internal.newstalk-ai.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: fastapi-backend
+            port:
+              number: 8000
+  
+  # LangGraph Service (internal only)
+  - host: langgraph-internal.newstalk-ai.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: langgraph-service
+            port:
+              number: 8001
+  
+  # Stream Processor (internal only)
+  - host: stream-internal.newstalk-ai.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: stream-processor
+            port:
+              number: 8002
+  
+  # Prometheus (internal only)
+  - host: prometheus-internal.newstalk-ai.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus
+            port:
+              number: 9090
+  
+  # Redis Insight (internal only)
+  - host: redis-internal.newstalk-ai.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: redis
+            port:
+              number: 8001
+
+---
+# Network Policy for security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: newstalk-ai-network-policy
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: newstalk-ai
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from nginx-ingress
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+  # Allow internal communication within namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: newstalk-ai
+  # Allow monitoring from prometheus namespace
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+  egress:
+  # Allow all egress for external API calls
+  - {}
+
+---
+# HorizontalPodAutoscaler for FastAPI Backend
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: fastapi-backend-hpa
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: fastapi-backend
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fastapi-backend
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+
+---
+# HorizontalPodAutoscaler for LangGraph Service
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: langgraph-service-hpa
+  namespace: newstalk-ai
+  labels:
+    app: newstalk-ai
+    component: langgraph-service
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: langgraph-service
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 85
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600
+      policies:
+      - type: Percent
+        value: 20
+        periodSeconds: 120
+    scaleUp:
+      stabilizationWindowSeconds: 120
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 120 
