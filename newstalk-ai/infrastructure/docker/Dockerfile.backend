@@ -1,4 +1,4 @@
-# Multi-stage build for NewsTalk AI Backend - Stage 8 Production Ready
+# Multi-stage build for NewsTalk AI Backend with Poetry - Stage 8 Production Ready
 FROM python:3.11-slim as builder
 
 # Build arguments
@@ -18,27 +18,31 @@ RUN apt-get update && apt-get install -y \
 # Install Poetry
 RUN pip install --no-cache-dir poetry==$POETRY_VERSION
 
-# Configure Poetry
-ENV POETRY_NO_INTERACTION=1 \
-    POETRY_VENV_IN_PROJECT=1 \
-    POETRY_CACHE_DIR=/tmp/poetry_cache \
-    POETRY_INSTALLER_PARALLEL=true
-
 WORKDIR /app
 
-# Copy dependency files
+# Copy Poetry configuration files
 COPY pyproject.toml poetry.lock ./
 
-# Install dependencies
-RUN poetry install --no-dev --no-root && rm -rf $POETRY_CACHE_DIR
+# Configure Poetry to create venv in project directory
+RUN poetry config virtualenvs.create true && \
+    poetry config virtualenvs.in-project true && \
+    poetry config virtualenvs.path .venv
+
+# Install dependencies using Poetry and verify .venv creation
+RUN poetry install --only=main --no-root && \
+    ls -la /app/.venv && \
+    echo "Virtual environment created successfully"
 
 # Production stage
 FROM python:3.11-slim as runtime
 
+# Build arguments for runtime stage
+ARG POETRY_VERSION=1.7.1
+
 # Labels for metadata
 LABEL maintainer="NewsTalk AI Team <dev@newstalk.ai>"
 LABEL version="1.0.0"
-LABEL description="NewsTalk AI Backend Service"
+LABEL description="NewsTalk AI Backend Service with Poetry"
 
 # Create non-root user with specific UID/GID
 RUN groupadd -r -g 1001 newstalk && \
@@ -52,17 +56,14 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean
 
 # Copy virtual environment from builder stage
-ENV VIRTUAL_ENV=/app/.venv
-COPY --from=builder --chown=newstalk:newstalk ${VIRTUAL_ENV} ${VIRTUAL_ENV}
-
-# Add virtual environment to PATH
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+COPY --from=builder --chown=newstalk:newstalk /app/.venv /app/.venv
 
 # Set working directory
 WORKDIR /app
 
-# Copy application code
-COPY --chown=newstalk:newstalk . .
+# Copy backend application code and Poetry files
+COPY --chown=newstalk:newstalk backend/ ./backend/
+COPY --chown=newstalk:newstalk pyproject.toml poetry.lock ./
 
 # Create necessary directories
 RUN mkdir -p /app/logs /app/tmp && \
@@ -75,7 +76,8 @@ USER newstalk
 ENV PYTHONPATH=/app \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PORT=8000
+    PORT=8000 \
+    PATH="/app/.venv/bin:$PATH"
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
@@ -84,5 +86,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Expose port
 EXPOSE ${PORT}
 
-# Run application with production settings
-CMD ["python", "-m", "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--access-log"] 
+# Run application directly using virtual environment
+CMD ["/app/.venv/bin/python", "-m", "uvicorn", "backend.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--access-log"] 

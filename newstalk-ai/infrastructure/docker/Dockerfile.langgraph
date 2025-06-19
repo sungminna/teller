@@ -1,4 +1,4 @@
-# Multi-stage build for NewsTalk AI LangGraph Service - Stage 8
+# Multi-stage build for NewsTalk AI LangGraph Service with Poetry - Stage 8
 FROM python:3.11-slim as builder
 
 # Build arguments
@@ -8,7 +8,7 @@ ARG POETRY_VERSION=1.7.1
 # Labels for metadata
 LABEL maintainer="NewsTalk AI Team <dev@newstalk.ai>"
 LABEL version="1.0.0"
-LABEL description="NewsTalk AI LangGraph Agents Service"
+LABEL description="NewsTalk AI LangGraph Agents Service with Poetry"
 
 # Install system dependencies for building
 RUN apt-get update && apt-get install -y \
@@ -23,19 +23,18 @@ RUN apt-get update && apt-get install -y \
 # Install Poetry
 RUN pip install --no-cache-dir poetry==$POETRY_VERSION
 
-# Configure Poetry
-ENV POETRY_NO_INTERACTION=1 \
-    POETRY_VENV_IN_PROJECT=1 \
-    POETRY_CACHE_DIR=/tmp/poetry_cache \
-    POETRY_INSTALLER_PARALLEL=true
-
 WORKDIR /app
 
-# Copy dependency files
+# Copy Poetry configuration files
 COPY pyproject.toml poetry.lock ./
 
-# Install dependencies with AI/ML optimizations
-RUN poetry install --no-dev --no-root && rm -rf $POETRY_CACHE_DIR
+# Export dependencies to requirements.txt using Poetry
+RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
+
+# Create virtual environment and install dependencies with AI/ML optimizations
+RUN python -m venv /app/venv && \
+    /app/venv/bin/pip install --no-cache-dir --upgrade pip && \
+    /app/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # Production stage
 FROM python:3.11-slim as runtime
@@ -52,17 +51,17 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean
 
 # Copy virtual environment from builder stage
-ENV VIRTUAL_ENV=/app/.venv
-COPY --from=builder --chown=langgraph:langgraph ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+COPY --from=builder --chown=langgraph:langgraph /app/venv /app/venv
 
 # Add virtual environment to PATH
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+ENV PATH="/app/venv/bin:$PATH"
 
 # Set working directory
 WORKDIR /app
 
-# Copy application code
-COPY --chown=langgraph:langgraph . .
+# Copy backend application code (LangGraph는 backend의 일부)
+COPY --chown=langgraph:langgraph backend/ ./backend/
+COPY --chown=langgraph:langgraph pyproject.toml poetry.lock ./
 
 # Create necessary directories
 RUN mkdir -p /app/logs /app/tmp /app/checkpoints && \
@@ -88,4 +87,4 @@ HEALTHCHECK --interval=30s --timeout=15s --start-period=60s --retries=3 \
 EXPOSE 8001
 
 # Run LangGraph service
-CMD ["python", "-m", "langgraph.main", "--host", "0.0.0.0", "--port", "8001", "--workers", "4"] 
+CMD ["python", "-m", "backend.langgraph.main", "--host", "0.0.0.0", "--port", "8001", "--workers", "4"] 

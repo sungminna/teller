@@ -1,4 +1,4 @@
-# Multi-stage build for NewsTalk AI Stream Processor - Stage 8
+# Multi-stage build for NewsTalk AI Stream Processor with Poetry - Stage 8
 FROM python:3.11-slim as builder
 
 # Build arguments
@@ -8,7 +8,7 @@ ARG POETRY_VERSION=1.7.1
 # Labels for metadata
 LABEL maintainer="NewsTalk AI Team <dev@newstalk.ai>"
 LABEL version="1.0.0"
-LABEL description="NewsTalk AI Stream Processor Service"
+LABEL description="NewsTalk AI Stream Processor Service with Poetry"
 
 # Install system dependencies for building
 RUN apt-get update && apt-get install -y \
@@ -24,19 +24,18 @@ RUN apt-get update && apt-get install -y \
 # Install Poetry
 RUN pip install --no-cache-dir poetry==$POETRY_VERSION
 
-# Configure Poetry
-ENV POETRY_NO_INTERACTION=1 \
-    POETRY_VENV_IN_PROJECT=1 \
-    POETRY_CACHE_DIR=/tmp/poetry_cache \
-    POETRY_INSTALLER_PARALLEL=true
-
 WORKDIR /app
 
-# Copy dependency files
+# Copy Poetry configuration files
 COPY pyproject.toml poetry.lock ./
 
-# Install dependencies
-RUN poetry install --no-dev --no-root && rm -rf $POETRY_CACHE_DIR
+# Export dependencies to requirements.txt using Poetry
+RUN poetry export -f requirements.txt --output requirements.txt --without-hashes
+
+# Create virtual environment and install dependencies
+RUN python -m venv /app/venv && \
+    /app/venv/bin/pip install --no-cache-dir --upgrade pip && \
+    /app/venv/bin/pip install --no-cache-dir -r requirements.txt
 
 # Production stage
 FROM python:3.11-slim as runtime
@@ -54,17 +53,17 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean
 
 # Copy virtual environment from builder stage
-ENV VIRTUAL_ENV=/app/.venv
-COPY --from=builder --chown=streamproc:streamproc ${VIRTUAL_ENV} ${VIRTUAL_ENV}
+COPY --from=builder --chown=streamproc:streamproc /app/venv /app/venv
 
 # Add virtual environment to PATH
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
+ENV PATH="/app/venv/bin:$PATH"
 
 # Set working directory
 WORKDIR /app
 
-# Copy application code
-COPY --chown=streamproc:streamproc . .
+# Copy backend application code (스트림 프로세서는 백엔드의 일부)
+COPY --chown=streamproc:streamproc backend/ ./backend/
+COPY --chown=streamproc:streamproc pyproject.toml poetry.lock ./
 
 # Create necessary directories
 RUN mkdir -p /app/logs /app/tmp && \
@@ -84,10 +83,10 @@ ENV PYTHONPATH=/app \
 
 # Health check for Stream Processor
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD python -c "from api.utils.stream_processor import health_check; health_check()" || exit 1
+    CMD python -c "import sys; sys.path.append('/app'); from backend.api.utils.stream_processor import health_check; health_check()" || exit 1
 
 # Expose port
 EXPOSE 8002
 
 # Run Stream Processor service
-CMD ["python", "-m", "api.utils.stream_processor"] 
+CMD ["python", "-m", "backend.api.utils.stream_processor"] 

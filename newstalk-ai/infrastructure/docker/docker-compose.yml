@@ -176,8 +176,8 @@ services:
   # Airflow Webserver with production settings
   airflow-webserver:
     build:
-      context: ../../backend
-      dockerfile: ../infrastructure/docker/Dockerfile.airflow
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.airflow
       args:
         BUILD_ENV: production
     container_name: newstalk-airflow-webserver
@@ -198,6 +198,8 @@ services:
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
       - AIRFLOW__API__AUTH_BACKENDS=airflow.api.auth.backend.basic_auth
       - AIRFLOW__WEBSERVER__SECRET_KEY=your-secret-key-here
+      - DOCKER_CONTAINER=true
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
     volumes:
       - ../../backend/airflow/dags:/opt/airflow/dags
       - ../../backend/airflow/logs:/opt/airflow/logs
@@ -225,8 +227,8 @@ services:
   # Airflow Scheduler with production settings
   airflow-scheduler:
     build:
-      context: ../../backend
-      dockerfile: ../infrastructure/docker/Dockerfile.airflow
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.airflow
       args:
         BUILD_ENV: production
     container_name: newstalk-airflow-scheduler
@@ -245,6 +247,8 @@ services:
       - AIRFLOW__CORE__FERNET_KEY=
       - AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION=true
       - AIRFLOW__CORE__LOAD_EXAMPLES=false
+      - DOCKER_CONTAINER=true
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
     volumes:
       - ../../backend/airflow/dags:/opt/airflow/dags
       - ../../backend/airflow/logs:/opt/airflow/logs
@@ -264,8 +268,8 @@ services:
   # Airflow Worker with resource limits
   airflow-worker:
     build:
-      context: ../../backend
-      dockerfile: ../infrastructure/docker/Dockerfile.airflow
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.airflow
       args:
         BUILD_ENV: production
     container_name: newstalk-airflow-worker
@@ -283,6 +287,8 @@ services:
       - AIRFLOW__CELERY__BROKER_URL=redis://redis:6379/0
       - AIRFLOW__CORE__FERNET_KEY=
       - AIRFLOW__CELERY__WORKER_CONCURRENCY=4
+      - DOCKER_CONTAINER=true
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
     volumes:
       - ../../backend/airflow/dags:/opt/airflow/dags
       - ../../backend/airflow/logs:/opt/airflow/logs
@@ -302,8 +308,8 @@ services:
   # FastAPI Backend with production configuration
   fastapi-backend:
     build:
-      context: ../../backend
-      dockerfile: ../infrastructure/docker/Dockerfile.backend
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.backend
       args:
         BUILD_ENV: production
     container_name: newstalk-fastapi
@@ -323,6 +329,8 @@ services:
       - REDIS_PORT=6379
       - KAFKA_HOST=kafka
       - KAFKA_PORT=29092
+      - DOCKER_CONTAINER=true
+      - ENVIRONMENT=production
       - PIPELINE_MAX_PROCESSING_TIME=300
       - SSE_MAX_CONNECTIONS=1000
       - ENABLE_STREAMING=true
@@ -333,8 +341,6 @@ services:
       - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL}
     ports:
       - "8000:8000"
-    volumes:
-      - ../../backend:/app
     networks:
       - newstalk-network
     deploy:
@@ -355,8 +361,8 @@ services:
   # LangGraph Service with dedicated container
   langgraph-service:
     build:
-      context: ../../backend
-      dockerfile: ../infrastructure/docker/Dockerfile.langgraph
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.langgraph
       args:
         BUILD_ENV: production
     container_name: newstalk-langgraph
@@ -392,8 +398,8 @@ services:
   # Stream Processor Service
   stream-processor:
     build:
-      context: ../../backend
-      dockerfile: ../infrastructure/docker/Dockerfile.stream-processor
+      context: ../../
+      dockerfile: infrastructure/docker/Dockerfile.stream-processor
       args:
         BUILD_ENV: production
     container_name: newstalk-stream-processor
